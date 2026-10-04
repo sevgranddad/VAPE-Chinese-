@@ -1,9 +1,9 @@
 --[[
     Vape V4 Chinese Translator
-    Version 3.0
+    Version 4.0
     Independent GUI translator - does NOT modify Vape core files.
 
-    V3 goals:
+    V4 goals:
     1. Module names
     2. Setting names
     3. Setting values
@@ -143,6 +143,24 @@ local Exact = {
     ["Notifications"] = "通知设置",
     ["GUI Theme"] = "界面主题",
     ["Rebind GUI"] = "重新绑定界面快捷键",
+    ["default"] = "默认",
+    ["Default"] = "默认",
+    ["Visual"] = "视觉",
+    ["TextGUI"] = "功能列表显示菜单",
+    ["TextGui"] = "功能列表显示菜单",
+    ["TargetInfo"] = "攻击目标显示",
+    ["SessionInfo"] = "当前对局信息",
+    ["Speedmeter"] = "速度计",
+    ["Anti-AFK"] = "防挂机",
+    ["Murder Mystery"] = "谋杀之谜",
+    ["NoClickDelay"] = "无点击延迟",
+    ["Velocity"] = "击退控制",
+    ["Sprint"] = "疾跑",
+    ["WTap"] = "WTap",
+    ["SilentAura"] = "静默光环",
+    ["AutoArmor"] = "自动穿甲",
+    ["AutoHeal"] = "自动治疗",
+    ["InvCleaner"] = "物品栏清理",
 }
 
 --==================================================
@@ -453,6 +471,12 @@ local function trim(text)
     return tostring(text):gsub("^%s+", ""):gsub("%s+$", "")
 end
 
+local function normalizeText(text)
+    text = tostring(text or "")
+    text = text:gsub("%s+", " ")
+    return trim(text)
+end
+
 local function hasChinese(text)
     return tostring(text):match("[\228-\233]") ~= nil
 end
@@ -721,7 +745,7 @@ local function TranslateText(text)
         return text
     end
 
-    text = tostring(text)
+    text = normalizeText(text)
 
     if text == "" then
         return text
@@ -781,10 +805,14 @@ local function remember(object, source, translated)
     }
 end
 
+local attachTextWatcher
+
 local function TranslateObject(object)
     if not object or not object.Parent or not isTextObject(object) then
         return false
     end
+
+    attachTextWatcher(object)
 
     local current = object.Text
 
@@ -833,6 +861,72 @@ end
 -- Dynamic GUI watcher
 --==================================================
 
+attachTextWatcher = function(object)
+    if not object or not isTextObject(object) then
+        return
+    end
+
+    if Connections[object] then
+        return
+    end
+
+    local ok, connection = pcall(function()
+        return object:GetPropertyChangedSignal("Text"):Connect(function()
+            if AutoTranslate and object.Parent then
+                task.defer(function()
+                    TranslateObject(object)
+                end)
+            end
+        end)
+    end)
+
+    if ok and connection then
+        Connections[object] = connection
+    end
+end
+
+local function ScanSubtree(root)
+    if not root then
+        return 0
+    end
+
+    local count = 0
+
+    if isTextObject(root) then
+        attachTextWatcher(root)
+        if TranslateObject(root) then
+            count += 1
+        end
+    end
+
+    for _, object in ipairs(root:GetDescendants()) do
+        if isTextObject(object) then
+            attachTextWatcher(object)
+            if TranslateObject(object) then
+                count += 1
+            end
+        end
+    end
+
+    return count
+end
+
+local function ScanGUI()
+    local count = 0
+
+    for _, object in ipairs(game:GetDescendants()) do
+        if isTextObject(object) then
+            attachTextWatcher(object)
+            if TranslateObject(object) then
+                count += 1
+            end
+        end
+    end
+
+    LastScanCount = count
+    return count
+end
+
 local function StartAutoTranslator()
     if Connections.DescendantAdded then
         Connections.DescendantAdded:Disconnect()
@@ -843,42 +937,34 @@ local function StartAutoTranslator()
             return
         end
 
-        task.defer(function()
-            if object and object.Parent and isTextObject(object) then
-                TranslateObject(object)
-            end
-
-            -- Some UI components create their children one frame later.
-            task.wait(0.05)
-
-            if object and object.Parent then
-                for _, child in ipairs(object:GetDescendants()) do
-                    if isTextObject(child) then
-                        TranslateObject(child)
-                    end
+        task.spawn(function()
+            -- Vape can construct a parent first and its text children later.
+            -- Retry several times so late-created GUI elements are caught.
+            for _, delayTime in ipairs({0, 0.08, 0.25, 0.75, 1.5}) do
+                if delayTime > 0 then
+                    task.wait(delayTime)
+                end
+                if object and object.Parent then
+                    pcall(function()
+                        ScanSubtree(object)
+                    end)
                 end
             end
         end)
     end)
 
-    if Connections.TextWatcher then
-        task.cancel(Connections.TextWatcher)
+    if Connections.TextWatcherLoop then
+        task.cancel(Connections.TextWatcherLoop)
     end
 
-    Connections.TextWatcher = task.spawn(function()
+    Connections.TextWatcherLoop = task.spawn(function()
         while true do
-            task.wait(ScanInterval)
+            task.wait(1.0)
 
             if AutoTranslate then
-                for object, state in pairs(TranslatedObjects) do
-                    if object and object.Parent and isTextObject(object) then
-                        local current = object.Text
-
-                        if current ~= state.translated then
-                            TranslateObject(object)
-                        end
-                    end
-                end
+                -- Full rescans are intentional: Vape can mutate existing GUI
+                -- objects without firing DescendantAdded.
+                pcall(ScanGUI)
             end
         end
     end)
@@ -889,8 +975,8 @@ end
 --==================================================
 
 local Window = WindUI:CreateWindow({
-    Title = "Vape 中文翻译器 由sevgranddad制作",
-    Author = "Vape GUI Translator V3",
+    Title = "Vape 中文翻译器 由sevgranddad制作awa",
+    Author = "Vape GUI Translator V4",
     Icon = "languages",
     Theme = "Dark",
     ToggleKey = Enum.KeyCode.RightControl,
@@ -902,7 +988,7 @@ local MainTab = Window:Tab({
 })
 
 MainTab:Paragraph({
-    Title = "Vape 中文翻译器 V3",
+    Title = "成功加载：Vape 中文翻译器 V4",
     Content = "模块 + 设置 + 设置值 + 动态文本 + Tooltip",
 })
 
@@ -973,7 +1059,7 @@ MainTab:Button({
         end
 
         WindUI:Notify({
-            Title = "V3 翻译测试",
+            Title = "V4 翻译测试",
             Content = table.concat(output, "\n"),
             Duration = 10,
         })
@@ -1002,7 +1088,7 @@ MainTab:Toggle({
 })
 
 MainTab:Paragraph({
-    Title = "V3 处理顺序",
+    Title = "V4 处理顺序",
     Content = "精确词条 → 设置/值 → 结构化文本 → 常用术语 → 动态数值/单位",
 })
 
@@ -1017,7 +1103,7 @@ task.wait(1)
 local count = ScanGUI()
 
 WindUI:Notify({
-    Title = "Vape 中文翻译器 V3",
+    Title = "Vape 中文翻译器 V4",
     Content = "已启动，首次翻译 " .. tostring(count) .. " 个文本",
     Duration = 5,
 })
