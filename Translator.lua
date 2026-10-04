@@ -1,8 +1,53 @@
--- Vape V4 中文翻译器。
+-- Vape V4 中文翻译器
+-- 直接翻译 Vape 原有界面文字：不创建翻译面板，不移动按钮，不修改 Vape 功能逻辑。
+-- 按《VAPE V4模块翻译对照表》整理
+-- 只修改界面文字，不修改 Vape 核心模块逻辑。
+-- 注意：对照表最后提到的 Blatant 两个未命名项目（“围绕目标旋转”“时间”）
+-- 没有英文原名，因此这里不擅自猜名字。
 
--- ========================================
--- 启动提示音
--- ========================================
+local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
+
+local TweenService = game:GetService("TweenService")
+
+-- ============================================================
+-- 启动提示：声音 + GitHub 启动图片淡入 / 停留 / 淡出
+-- 使用与之前 Loader 相同的 Delta 本地资源方式：
+-- HttpGet -> writefile -> getcustomasset -> ImageLabel.Image
+-- ============================================================
+
+local IMAGE_URL =
+    "https://raw.githubusercontent.com/sevgranddad/VAPE-Chinese-/main/Screenshot_20261003_183109.jpg"
+
+local IMAGE_PATH =
+    "MyClient/VapeChineseSplash.jpg"
+
+local imageAsset = nil
+
+pcall(function()
+    -- 创建本地文件夹
+    if makefolder and not isfolder("MyClient") then
+        makefolder("MyClient")
+    end
+
+    -- 下载 GitHub 图片
+    if isfile and writefile and not isfile(IMAGE_PATH) then
+        local data = game:HttpGet(IMAGE_URL)
+        if data then
+            writefile(IMAGE_PATH, data)
+        end
+    end
+
+    -- 转换为执行器可用的图片资源
+    if getcustomasset and isfile and isfile(IMAGE_PATH) then
+        imageAsset = getcustomasset(IMAGE_PATH)
+    end
+end)
+
+-- ============================================================
+-- 启动声音
+-- ============================================================
+
 pcall(function()
     local SoundService = game:GetService("SoundService")
 
@@ -10,6 +55,7 @@ pcall(function()
     sound.SoundId = "rbxassetid://6026984224"
     sound.Volume = 1
     sound.Parent = SoundService
+
     sound:Play()
 
     sound.Ended:Connect(function()
@@ -17,18 +63,11 @@ pcall(function()
     end)
 end)
 
-local Players = game:GetService("Players")
-local CoreGui = game:GetService("CoreGui")
-
--- ========================================
+-- ============================================================
 -- VAPE V4 启动画面
--- ========================================
+-- ============================================================
 
 pcall(function()
-
-    local Players = game:GetService("Players")
-    local TweenService = game:GetService("TweenService")
-
     local Player = Players.LocalPlayer
     if not Player then
         return
@@ -36,7 +75,6 @@ pcall(function()
 
     local PlayerGui = Player:WaitForChild("PlayerGui")
 
-    -- 创建启动画面
     local SplashGui = Instance.new("ScreenGui")
     SplashGui.Name = "VapeCN_Splash"
     SplashGui.IgnoreGuiInset = true
@@ -44,8 +82,8 @@ pcall(function()
     SplashGui.DisplayOrder = 999999
     SplashGui.Parent = PlayerGui
 
-    -- 黑色背景
     local Background = Instance.new("Frame")
+    Background.Name = "Background"
     Background.Size = UDim2.fromScale(1, 1)
     Background.Position = UDim2.fromScale(0, 0)
     Background.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
@@ -53,62 +91,46 @@ pcall(function()
     Background.BorderSizePixel = 0
     Background.Parent = SplashGui
 
-    -- 图片
     local Image = Instance.new("ImageLabel")
+    Image.Name = "SplashImage"
     Image.AnchorPoint = Vector2.new(0.5, 0.5)
     Image.Position = UDim2.fromScale(0.5, 0.5)
-
-    -- 根据你的图片比例调整
     Image.Size = UDim2.fromScale(0.85, 0.65)
-
     Image.BackgroundTransparency = 1
-    Image.Image = "https://raw.githubusercontent.com/sevgranddad/VAPE-Chinese-/main/Screenshot_20261003_183109.jpg"
-
-    -- 一开始完全透明
     Image.ImageTransparency = 1
-
     Image.ScaleType = Enum.ScaleType.Fit
+
+    if imageAsset then
+        Image.Image = imageAsset
+    end
+
     Image.Parent = Background
 
-    -- 淡入
+    -- 图片淡入
     local FadeIn = TweenService:Create(
         Image,
-        TweenInfo.new(
-            0.8,
-            Enum.EasingStyle.Quad,
-            Enum.EasingDirection.Out
-        ),
-        {
-            ImageTransparency = 0
-        }
+        TweenInfo.new(0.8, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        {ImageTransparency = 0}
+    )
+
+    -- 图片淡出
+    local FadeOut = TweenService:Create(
+        Image,
+        TweenInfo.new(0.8, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+        {ImageTransparency = 1}
     )
 
     FadeIn:Play()
     FadeIn.Completed:Wait()
 
-    -- 停留
     task.wait(1.5)
-
-    -- 淡出
-    local FadeOut = TweenService:Create(
-        Image,
-        TweenInfo.new(
-            0.8,
-            Enum.EasingStyle.Quad,
-            Enum.EasingDirection.In
-        ),
-        {
-            ImageTransparency = 1
-        }
-    )
 
     FadeOut:Play()
     FadeOut.Completed:Wait()
 
-    -- 删除启动画面
     SplashGui:Destroy()
-
 end)
+
 
 -- Rayfield 控制面板：只负责控制翻译器，不替代 Vape 原界面。
 local Rayfield = nil
@@ -526,7 +548,7 @@ end
 if Rayfield then
     pcall(function()
         local Window = Rayfield:CreateWindow({
-            Name = "Vape 中文翻译器(持续更新)",
+            Name = "Vape 中文翻译器",
             Icon = 0,
             LoadingTitle = "Vape 中文翻译器",
             LoadingSubtitle = "by sevgranddad",
