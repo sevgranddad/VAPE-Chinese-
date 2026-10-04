@@ -1,12 +1,33 @@
--- Vape V4 中文翻译器
--- 直接翻译 Vape 原有界面文字：不创建翻译面板，不移动按钮，不修改 Vape 功能逻辑。
--- 按《VAPE V4模块翻译对照表》整理
--- 只修改界面文字，不修改 Vape 核心模块逻辑。
--- 注意：对照表最后提到的 Blatant 两个未命名项目（“围绕目标旋转”“时间”）
--- 没有英文原名，因此这里不擅自猜名字。
+-- Vape V4 中文翻译器。
+
+-- ========================================
+-- 启动提示音
+-- ========================================
+pcall(function()
+    local SoundService = game:GetService("SoundService")
+
+    local sound = Instance.new("Sound")
+    sound.SoundId = "rbxassetid://6026984224"
+    sound.Volume = 1
+    sound.Parent = SoundService
+    sound:Play()
+
+    sound.Ended:Connect(function()
+        sound:Destroy()
+    end)
+end)
 
 local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
+
+-- Rayfield 控制面板：只负责控制翻译器，不替代 Vape 原界面。
+local Rayfield = nil
+pcall(function()
+    Rayfield = loadstring(game:HttpGet(
+        "https://sirius.menu/rayfield"
+    ))()
+end)
+
 
 local Translator = {
     -- Combat
@@ -327,6 +348,7 @@ end)
 -- 第一次扫描。
 local totalObjects = 0
 local totalChanged = 0
+local AutoTranslate = true
 
 for _, rootInfo in ipairs(roots) do
     local count, changed = scanRoot(rootInfo.instance)
@@ -337,10 +359,12 @@ end
 -- 周期扫描：处理 Vape 动态创建/刷新/改文字的情况。
 task.spawn(function()
     while task.wait(1.5) do
-        for _, rootInfo in ipairs(roots) do
-            pcall(function()
-                scanRoot(rootInfo.instance)
-            end)
+        if AutoTranslate then
+            for _, rootInfo in ipairs(roots) do
+                pcall(function()
+                    scanRoot(rootInfo.instance)
+                end)
+            end
         end
     end
 end)
@@ -371,7 +395,9 @@ local function watchTextObject(obj)
         pcall(function()
             signal:Connect(function()
                 task.defer(function()
-                    translateObject(obj)
+                    if AutoTranslate then
+                        translateObject(obj)
+                    end
                 end)
             end)
         end)
@@ -391,11 +417,129 @@ for _, rootInfo in ipairs(roots) do
     pcall(function()
         rootInfo.instance.DescendantAdded:Connect(function(obj)
             task.defer(function()
-                translateObject(obj)
+                if AutoTranslate then
+                    translateObject(obj)
+                end
                 watchTextObject(obj)
             end)
         end)
     end)
+end
+
+
+-- ============================================================
+-- Rayfield UI
+-- 作者：sevgranddad
+-- Q群：1107177693
+-- ============================================================
+
+if Rayfield then
+    pcall(function()
+        local Window = Rayfield:CreateWindow({
+            Name = "Vape 中文翻译器(持续更新)",
+            Icon = 0,
+            LoadingTitle = "Vape 中文翻译器",
+            LoadingSubtitle = "by sevgranddad",
+            ShowText = "Vape 中文翻译器",
+            Theme = "Default",
+            ToggleUIKeybind = "K",
+            DisableRayfieldPrompts = true,
+            DisableBuildWarnings = true,
+            ConfigurationSaving = {
+                Enabled = false
+            }
+        })
+
+        local MainTab = Window:CreateTab("翻译", 0)
+
+        MainTab:CreateParagraph({
+            Title = "Vape V4 中文翻译器",
+            Content = "作者：sevgranddad\nQ群：1107177693\n直接翻译 Vape 原有 GUI，不修改 Vape 功能逻辑。"
+        })
+
+        MainTab:CreateToggle({
+            Name = "自动翻译",
+            CurrentValue = true,
+            Flag = "AutoTranslate",
+            Callback = function(Value)
+                AutoTranslate = Value
+            end
+        })
+
+        MainTab:CreateButton({
+            Name = "立即扫描并翻译",
+            Callback = function()
+                local count = 0
+                local changed = 0
+
+                for _, rootInfo in ipairs(roots) do
+                    local a, b = scanRoot(rootInfo.instance)
+                    count = count + a
+                    changed = changed + b
+                end
+
+                Rayfield:Notify({
+                    Title = "扫描完成",
+                    Content = ("扫描 %d 个 GUI 对象，翻译 %d 个文字对象。"):format(count, changed),
+                    Duration = 4
+                })
+            end
+        })
+
+        MainTab:CreateButton({
+            Name = "重新扫描 GUI",
+            Callback = function()
+                roots = {}
+                seen = {}
+
+                addRoot(CoreGui, "CoreGui")
+
+                pcall(function()
+                    addRoot(Players.LocalPlayer:WaitForChild("PlayerGui"), "PlayerGui")
+                end)
+
+                pcall(function()
+                    if type(gethui) == "function" then
+                        addRoot(gethui(), "gethui")
+                    end
+                end)
+
+                pcall(function()
+                    if type(get_hidden_gui) == "function" then
+                        addRoot(get_hidden_gui(), "get_hidden_gui")
+                    end
+                end)
+
+                for _, rootInfo in ipairs(roots) do
+                    pcall(function()
+                        for _, obj in ipairs(rootInfo.instance:GetDescendants()) do
+                            watchTextObject(obj)
+                        end
+                    end)
+                end
+
+                Rayfield:Notify({
+                    Title = "GUI 已重新扫描",
+                    Content = "已重新建立 GUI 扫描目标。",
+                    Duration = 3
+                })
+            end
+        })
+
+        MainTab:CreateSection("关于")
+
+        MainTab:CreateLabel("作者：sevgranddad")
+        MainTab:CreateLabel("Q群：1107177693")
+        MainTab:CreateLabel("翻译范围：Vape V4 主界面 / 模块 / 设置 / 视觉模块")
+
+        Rayfield:Notify({
+            Title = "Vape 中文翻译器",
+            Content = "翻译器已启动 · 作者 sevgranddad · Q群 1107177693",
+            Duration = 5
+        })
+    end)
+else
+    warn("[VapeCN] Rayfield 加载失败，原地翻译功能仍会继续运行。")
 end
 
 -- 输出诊断信息，方便确认脚本是否真的执行。
