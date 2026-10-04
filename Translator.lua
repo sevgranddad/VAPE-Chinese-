@@ -1,17 +1,17 @@
 --[[
-    Vape V4 Chinese Translator
-    Version 4.0
-    Independent GUI translator - does NOT modify Vape core files.
+    VAPE V4 中文翻译器
+    V5 - 从零重构版
 
-    V4 goals:
-    1. Module names
-    2. Setting names
-    3. Setting values
-    4. Structured text such as "Target: Players, NPCs"
-    5. Dynamic values/numbers/player names/keybinds/colors
-    6. Tooltips/descriptions
-    7. Dynamically-created Vape GUI elements
-    8. Safe re-translation without Chinese -> Chinese -> Chinese corruption
+    目标：
+    1. 不修改 Vape 核心文件
+    2. 只修改 GUI 可见文本
+    3. 同时扫描 CoreGui / PlayerGui
+    4. 支持动态创建 GUI
+    5. 支持 Text / PlaceholderText
+    6. 支持 RichText，尽量保留 <font> / <b> 等标签
+    7. 先精确词条，再结构化设置，再通用词条
+    8. 不修改 Instance.Name，避免破坏 Vape
+    9. 记住原文，避免“中文 -> 中文”反复处理
 ]]
 
 --==================================================
@@ -23,30 +23,41 @@ local WindUI = loadstring(game:HttpGet(
 ))()
 
 --==================================================
--- Configuration
+-- 配置
 --==================================================
 
-local AutoTranslate = true
-local DebugMode = false
-local ScanInterval = 0.50
-local TranslatedObjects = setmetatable({}, {__mode = "k"})
-local Connections = {}
-local LastScanCount = 0
+local Config = {
+    AutoTranslate = true,
+    Debug = false,
+    ScanDelay = 0.10,
+    FullScanInterval = 1.50,
+}
+
+local State = setmetatable({}, {__mode = "k"})
+local TextConnections = setmetatable({}, {__mode = "k"})
+local RootConnections = {}
+local FullScanThread
 
 --==================================================
--- 1. Vape module/category dictionary
+-- 词库：用户提供的 Vape V4 对照表为第一优先级
 --==================================================
 
 local Exact = {
-    -- Categories
+    -- 主分类
     ["Combat"] = "战斗",
     ["Blatant"] = "明显功能",
     ["Render"] = "渲染",
     ["Utility"] = "实用工具",
     ["World"] = "世界",
     ["Inventory"] = "物品栏",
-    ["Misc"] = "杂项",
+
+    -- MISC
     ["MISC"] = "杂项",
+    ["Misc"] = "杂项",
+    ["Friends"] = "好友",
+    ["Profiles"] = "配置文件",
+    ["Profile"] = "配置文件",
+    ["Targets"] = "目标设置",
 
     -- Combat
     ["AimAssist"] = "瞄准辅助",
@@ -63,6 +74,7 @@ local Exact = {
     ["Invisible"] = "隐身",
     ["Jesus"] = "水上行走",
     ["Killaura"] = "杀戮光环",
+    ["KillAura"] = "杀戮光环",
     ["LongJump"] = "长跳",
     ["MouseTP"] = "鼠标传送",
     ["Phase"] = "相位穿透",
@@ -79,6 +91,7 @@ local Exact = {
     ["GamingChair"] = "游戏座椅透视",
     ["Health"] = "血量显示",
     ["NameTags"] = "玩家名字标签",
+    ["Nametags"] = "玩家名字标签",
     ["PlayerModel"] = "玩家模型修改",
     ["Search"] = "物品检索透视",
     ["Tracers"] = "敌人连线",
@@ -103,22 +116,24 @@ local Exact = {
     ["Freecam"] = "自由视角",
     ["Gravity"] = "重力修改",
     ["MurderMystery"] = "谋杀之谜",
+    ["Murder Mystery"] = "谋杀之谜",
     ["Parkour"] = "跑酷辅助",
     ["SafeWalk"] = "安全行走",
     ["Wallhop"] = "墙体跳跃",
     ["Xray"] = "X光透视",
 
-    -- Misc / visual
-    ["Friends"] = "好友",
-    ["Profiles"] = "配置文件",
-    ["Targets"] = "目标设置",
+    -- 底部视觉模块
     ["Text GUI"] = "功能列表显示菜单",
+    ["TextGUI"] = "功能列表显示菜单",
+    ["TextGui"] = "功能列表显示菜单",
     ["Target Info"] = "攻击目标显示",
+    ["TargetInfo"] = "攻击目标显示",
     ["Radar"] = "雷达",
     ["Session Info"] = "当前对局信息",
+    ["SessionInfo"] = "当前对局信息",
     ["Spotify"] = "音乐插件",
 
-    -- Search mods / HUD
+    -- Search mods / Legit
     ["Search mods"] = "搜索模块",
     ["Atmosphere"] = "氛围特效",
     ["Breadcrumbs"] = "轨迹残留",
@@ -134,6 +149,7 @@ local Exact = {
     ["Song Beats"] = "音乐节拍",
     ["Speedmeter"] = "速度计",
     ["Time Changer"] = "时间修改",
+    ["TimeChanger"] = "时间修改",
 
     -- Settings
     ["Settings"] = "设置",
@@ -143,35 +159,83 @@ local Exact = {
     ["Notifications"] = "通知设置",
     ["GUI Theme"] = "界面主题",
     ["Rebind GUI"] = "重新绑定界面快捷键",
-    ["default"] = "默认",
-    ["Default"] = "默认",
-    ["Visual"] = "视觉",
-    ["TextGUI"] = "功能列表显示菜单",
-    ["TextGui"] = "功能列表显示菜单",
-    ["TargetInfo"] = "攻击目标显示",
-    ["SessionInfo"] = "当前对局信息",
-    ["Speedmeter"] = "速度计",
-    ["Anti-AFK"] = "防挂机",
-    ["Murder Mystery"] = "谋杀之谜",
+
+    -- General
+    ["Enable Multi-Keybinding"] = "启用多按键绑定",
+    ["Allow setting keybinds"] = "允许设置快捷键",
+    ["Reset current profile"] = "重置当前配置文件",
+    ["Self destruct"] = "自毁",
+    ["Reinject"] = "重新注入",
+
+    -- Modules
+    ["Teams by server"] = "按服务器区分队伍",
+    ["Use team color"] = "使用队伍颜色",
+
+    -- GUI
+    ["Blur background"] = "背景模糊",
+    ["GUI bind indicator"] = "界面快捷键指示器",
+    ["Show tooltips"] = "显示提示信息",
+    ["Show legit mode"] = "显示低调模式",
+    ["Auto rescale"] = "自动缩放",
+    ["Rainbow speed"] = "彩虹动画速度",
+    ["Rainbow update rate"] = "彩虹刷新率",
+    ["Search bar style"] = "搜索栏样式",
+    ["Rainbow Mode - Normal"] = "彩虹模式 - 普通",
+    ["Reset GUI positions"] = "重置界面位置",
+    ["Sort GUI"] = "界面自动排序",
+
+    -- Notifications
+    ["Toggle alert"] = "开关模块提醒",
+    ["Setting toggle alert"] = "修改设置提醒",
+
+    -- 常见额外模块（用于不同 Vape 构建）
     ["NoClickDelay"] = "无点击延迟",
     ["Velocity"] = "击退控制",
     ["Sprint"] = "疾跑",
-    ["WTap"] = "WTap",
-    ["SilentAura"] = "静默光环",
-    ["AutoArmor"] = "自动穿甲",
+    ["TargetStrafe"] = "围绕目标旋转",
+    ["Timer"] = "时间修改",
+    ["Scaffold"] = "自动搭路",
+    ["NoFall"] = "防坠落",
+    ["NoSlowdown"] = "防减速",
+    ["InfiniteFly"] = "无限飞行",
+    ["Block-In"] = "自动围墙",
+    ["AntiFireball"] = "防火球",
+    ["InventoryManager"] = "物品栏管理",
+    ["ArmorSwitch"] = "切换护甲",
+    ["AutoArmor"] = "自动装备护甲",
     ["AutoHeal"] = "自动治疗",
     ["InvCleaner"] = "物品栏清理",
+    ["AutoBuy"] = "自动购买",
+    ["AutoConsume"] = "自动使用",
+    ["AutoHotbar"] = "自动整理快捷栏",
+    ["FastConsume"] = "快速使用",
+    ["FastDrop"] = "快速丢弃",
+    ["DamageIndicator"] = "伤害指示器",
+    ["FPSBoost"] = "帧率优化",
+    ["HitColor"] = "受击颜色",
+    ["HitFix"] = "命中修复",
+    ["Interface"] = "界面",
+    ["KillEffect"] = "击杀特效",
+    ["ReachDisplay"] = "攻击距离显示",
+    ["Viewmodel"] = "第一人称模型",
+    ["Potion Status"] = "药水状态",
+    ["Armor Status"] = "护甲状态",
+    ["Compass"] = "指南针",
+    ["Coords"] = "坐标",
+    ["Inventory Blur"] = "物品栏背景模糊",
+    ["Clear Water"] = "水下清晰",
+    ["UICleanup"] = "界面清理",
 }
 
 --==================================================
--- 2. Setting names / labels
+-- 设置标签
 --==================================================
 
 local Labels = {
     ["Target"] = "目标",
     ["Targets"] = "目标",
-    ["Target Info"] = "攻击目标显示",
     ["Target Color"] = "目标颜色",
+    ["Target Part"] = "目标部位",
     ["Target Part"] = "目标部位",
 
     ["Player"] = "玩家",
@@ -180,9 +244,10 @@ local Labels = {
     ["NPCs"] = "NPC",
     ["Enemy"] = "敌人",
     ["Enemies"] = "敌人",
+    ["Friend"] = "好友",
     ["Friends"] = "好友",
-    ["Teams"] = "队伍",
     ["Team"] = "队伍",
+    ["Teams"] = "队伍",
     ["Team color"] = "队伍颜色",
     ["Use team color"] = "使用队伍颜色",
     ["Teams by server"] = "按服务器区分队伍",
@@ -191,8 +256,8 @@ local Labels = {
     ["Ignore friends"] = "忽略好友",
     ["Ignore team"] = "忽略队伍",
     ["Ignored"] = "已忽略",
-    ["Blacklist"] = "黑名单",
     ["Whitelist"] = "白名单",
+    ["Blacklist"] = "黑名单",
 
     ["Mode"] = "模式",
     ["Type"] = "类型",
@@ -210,9 +275,9 @@ local Labels = {
     ["Min range"] = "最小范围",
 
     ["FOV"] = "视野范围",
+    ["Field of View"] = "视野范围",
     ["Max angle"] = "最大角度",
     ["Angle"] = "角度",
-    ["Field of View"] = "视野范围",
     ["Range Circle"] = "范围圆",
     ["Circle Color"] = "圆圈颜色",
     ["Circle Filled"] = "填充圆圈",
@@ -237,6 +302,7 @@ local Labels = {
     ["Show target info"] = "显示目标信息",
 
     ["Color"] = "颜色",
+    ["Player Color"] = "玩家颜色",
     ["Outline Color"] = "轮廓颜色",
     ["Fill Color"] = "填充颜色",
     ["Transparency"] = "透明度",
@@ -256,10 +322,10 @@ local Labels = {
     ["Disabled"] = "已禁用",
     ["Enable"] = "启用",
     ["Disable"] = "禁用",
-    ["Default"] = "默认",
     ["Value"] = "数值",
     ["Min"] = "最小值",
     ["Max"] = "最大值",
+    ["Default"] = "默认",
 
     ["Delay"] = "延迟",
     ["Next Shot Delay"] = "下一次射击延迟",
@@ -273,7 +339,6 @@ local Labels = {
     ["Offset"] = "偏移",
     ["Position"] = "位置",
     ["Rotation"] = "旋转",
-    ["Method"] = "方法",
     ["Raycast Type"] = "射线检测类型",
     ["Raycast"] = "射线检测",
     ["Ignored Scripts"] = "忽略脚本",
@@ -290,6 +355,8 @@ local Labels = {
     ["Tooltip"] = "提示",
     ["Description"] = "说明",
     ["Visible"] = "可见",
+    ["Show"] = "显示",
+    ["Hide"] = "隐藏",
 
     ["Tool"] = "工具",
     ["Click"] = "左键",
@@ -307,11 +374,6 @@ local Labels = {
     ["Sort GUI"] = "界面自动排序",
     ["Rainbow Mode - Normal"] = "彩虹模式 - 普通",
 
-    -- Notifications
-    ["Notifications"] = "通知总开关",
-    ["Toggle alert"] = "开关模块提醒",
-    ["Setting toggle alert"] = "修改设置提醒",
-
     -- General
     ["Enable Multi-Keybinding"] = "启用多按键绑定",
     ["Allow setting keybinds"] = "允许设置快捷键",
@@ -321,7 +383,7 @@ local Labels = {
 }
 
 --==================================================
--- 3. Common values
+-- 值
 --==================================================
 
 local Values = {
@@ -329,11 +391,12 @@ local Values = {
     ["All"] = "全部",
     ["Any"] = "任意",
     ["Players"] = "玩家",
-    ["NPCs"] = "NPC",
     ["Player"] = "玩家",
+    ["NPCs"] = "NPC",
     ["NPC"] = "NPC",
     ["Friends"] = "好友",
     ["Enemies"] = "敌人",
+    ["Enemy"] = "敌人",
     ["Teams"] = "队伍",
     ["Team"] = "队伍",
 
@@ -373,19 +436,10 @@ local Values = {
     ["Outline"] = "轮廓",
     ["Box"] = "方框",
     ["Both"] = "两者",
-
-    ["Second"] = "秒",
-    ["Seconds"] = "秒",
-    ["second"] = "秒",
-    ["seconds"] = "秒",
-    ["stud"] = "格",
-    ["studs"] = "格",
-    ["degree"] = "度",
-    ["degrees"] = "度",
 }
 
 --==================================================
--- 4. Tooltips / descriptions
+-- Tooltip
 --==================================================
 
 local Tooltips = {
@@ -397,12 +451,14 @@ local Tooltips = {
     ["Panic Disables all currently enabled modules"] = "紧急关闭当前所有已启用的模块",
     ["Delays packets, simulating lag"] = "延迟数据包，模拟网络延迟",
     ["Chokes packets until disabled"] = "持续阻塞数据包，直到关闭功能",
+    ["Draws arrows on screen when entities\nare out of your field of view."] = "当目标离开视野时，在屏幕上显示方向箭头。",
+    ["Renders an ESP on players."] = "在玩家身上显示透视信息。",
+    ["Renders tracers on players."] = "在玩家身上显示连线。",
+    ["Displays your health in the center of your screen."] = "在屏幕中央显示你的生命值。",
 }
 
 --==================================================
--- 5. Generic vocabulary
--- This is deliberately conservative. It is only used
--- after exact phrases and labels.
+-- 通用词
 --==================================================
 
 local Generic = {
@@ -453,7 +509,6 @@ local Generic = {
     ["Friends"] = "好友",
     ["Team"] = "队伍",
     ["Teams"] = "队伍",
-    ["Color"] = "颜色",
     ["Visible"] = "可见",
     ["Show"] = "显示",
     ["Hide"] = "隐藏",
@@ -464,86 +519,70 @@ local Generic = {
 }
 
 --==================================================
--- Utilities
+-- 工具函数
 --==================================================
 
-local function trim(text)
-    return tostring(text):gsub("^%s+", ""):gsub("%s+$", "")
+local function trim(s)
+    return tostring(s or ""):gsub("^%s+", ""):gsub("%s+$", "")
 end
 
-local function normalizeText(text)
-    text = tostring(text or "")
-    text = text:gsub("%s+", " ")
-    return trim(text)
+local function normalize(s)
+    s = tostring(s or "")
+    s = s:gsub("\r\n", "\n")
+    s = s:gsub("[ \t]+", " ")
+    s = s:gsub(" *\n *", "\n")
+    return trim(s)
 end
 
-local function hasChinese(text)
-    return tostring(text):match("[\228-\233]") ~= nil
+local function hasChinese(s)
+    -- UTF-8 中文字符的字节范围
+    return tostring(s):match("[\228-\233]") ~= nil
 end
 
-local function escapePattern(text)
-    return tostring(text):gsub("([^%w])", "%%%1")
+local function escapePattern(s)
+    return tostring(s):gsub("([^%w])", "%%%1")
 end
 
-local function replacePlain(text, from, to)
-    return string.gsub(text, escapePattern(from), to)
+local function plainReplace(text, from, to)
+    return (string.gsub(text, escapePattern(from), to))
 end
 
-local function isLikelyDynamicToken(token)
+local function looksDynamic(token)
     token = trim(token)
-
     if token == "" then
         return true
     end
 
-    -- Numbers / decimals / percentages
     if token:match("^%-?%d+%.?%d*%%?$") then
         return true
     end
 
-    -- Roblox key names / key combinations
-    if token:match("^[A-Z][A-Z0-9_]*$") and #token <= 8 then
+    if token:match("^#%x%x%x%x%x%x$") then
         return true
     end
 
-    -- Hex colors
-    if token:match("^#%x%x%x%x%x%x$") then
+    -- Roblox 按键 / 键位，例如 LEFTSHIFT、F、MB2
+    if token:match("^[A-Z][A-Z0-9_]*$") and #token <= 12 then
         return true
     end
 
     return false
 end
 
---==================================================
--- Structured-value translation
---==================================================
+local function translateToken(token)
+    local t = trim(token)
 
-local function translateValueToken(token)
-    local clean = trim(token)
-
-    if isLikelyDynamicToken(clean) then
-        return clean
+    if looksDynamic(t) then
+        return t
     end
 
-    if Values[clean] then
-        return Values[clean]
-    end
-
-    if Labels[clean] then
-        return Labels[clean]
-    end
-
-    if Generic[clean] then
-        return Generic[clean]
-    end
-
-    return clean
+    return Exact[t] or Labels[t] or Values[t] or Generic[t] or t
 end
 
-local function translateList(text)
+local function translateList(value)
     local parts = {}
-    for item in tostring(text):gmatch("[^,;]+") do
-        table.insert(parts, translateValueToken(item))
+    for item in tostring(value):gmatch("[^,;]+") do
+        table.insert(parts, translateToken(item))
     end
 
     if #parts > 1 then
@@ -554,15 +593,43 @@ local function translateList(text)
 end
 
 --==================================================
--- Label: Value parser
--- Handles:
---   Target: Players, NPCs
---   Ignore: None
---   Attacks per Second: 20
---   Target Color: #ffffff
+-- RichText：保留标签，只翻译可见文字
 --==================================================
 
-local function translateColonExpression(text)
+local function translateRichText(text)
+    local pieces = {}
+    local cursor = 1
+
+    while true do
+        local a, b = tostring(text):find("<[^>]->", cursor)
+
+        if not a then
+            table.insert(pieces, tostring(text):sub(cursor))
+            break
+        end
+
+        table.insert(pieces, tostring(text):sub(cursor, a - 1))
+        table.insert(pieces, tostring(text):sub(a, b))
+        cursor = b + 1
+    end
+
+    for i = 1, #pieces do
+        if not pieces[i]:match("^<[^>]->$") then
+            pieces[i] = translatePlainText(pieces[i])
+        end
+    end
+
+    return table.concat(pieces)
+end
+
+--==================================================
+-- 结构化设置：
+-- Target: Players, NPCs
+-- Ignore: None
+-- Attacks per Second: 20
+--==================================================
+
+function translateStructured(text)
     local label, value = tostring(text):match("^%s*(.-)%s*:%s*(.-)%s*$")
 
     if not label or not value then
@@ -575,31 +642,25 @@ local function translateColonExpression(text)
         or Generic[label]
         or label
 
-    -- A purely numeric/dynamic value stays untouched.
-    if isLikelyDynamicToken(value) then
+    value = trim(value)
+
+    if looksDynamic(value) then
         return translatedLabel .. "：" .. value
     end
 
-    -- Lists such as Players, NPCs / Friends, Enemies
     local list = translateList(value)
     if list then
         return translatedLabel .. "：" .. list
     end
 
-    local translatedValue =
-        Values[value]
-        or Labels[value]
-        or Generic[value]
-        or value
-
-    return translatedLabel .. "：" .. translatedValue
+    return translatedLabel .. "：" .. translateToken(value)
 end
 
 --==================================================
--- Unit-aware translation
+-- 带单位文本
 --==================================================
 
-local function translateUnits(text)
+function translateUnits(text)
     local result = text
 
     result = result:gsub("(%-?%d+%.?%d*)%s*studs?", "%1 格")
@@ -611,11 +672,10 @@ local function translateUnits(text)
 end
 
 --==================================================
--- Phrase replacement
--- Long phrases first.
+-- 长短语：长的必须先处理
 --==================================================
 
-local Replacements = {
+local Phrases = {
     {"Attacks per Second", "每秒攻击次数"},
     {"Require mouse down", "需要按住鼠标"},
     {"Require right click", "需要按住右键"},
@@ -646,6 +706,7 @@ local Replacements = {
     {"Target Info", "攻击目标显示"},
     {"Session Info", "当前对局信息"},
     {"Time Changer", "时间修改"},
+    {"TimeChanger", "时间修改"},
     {"Attack range", "攻击范围"},
     {"Swing range", "挥击范围"},
     {"Max targets", "最大目标数"},
@@ -653,38 +714,35 @@ local Replacements = {
     {"Max angle", "最大角度"},
     {"Show target", "显示目标"},
     {"Ignore friends", "忽略好友"},
-    {"Through Walls", "穿墙"},
     {"Hit Chance", "命中概率"},
     {"Headshot Chance", "爆头概率"},
     {"Range Circle", "范围圆"},
     {"Circle Color", "圆圈颜色"},
     {"Circle Filled", "填充圆圈"},
     {"Function hook", "函数钩子"},
-    {"Oth hook", "备用钩子"},
     {"Shoot Delay", "射击延迟"},
-    {"AutoFire", "自动开火"},
-    {"Wallbang", "穿墙攻击"},
-    {"HumanoidRootPart", "角色根部"},
-    {"RootPart", "根部"},
+    {"Auto send", "自动发送"},
+    {"Send threshold", "发送阈值"},
+    {"Through Walls", "穿墙"},
     {"Search mods", "搜索模块"},
     {"Rainbow Mode - Normal", "彩虹模式 - 普通"},
     {"Murder Mystery", "谋杀之谜"},
-    {"Anti-AFK", "防挂机"},
     {"FastProxPrompt", "快速交互提示"},
+    {"Anti-AFK", "防挂机"},
 }
 
-local function translateCommon(text)
+local function translatePlainText(text)
     local result = tostring(text)
 
-    for _, pair in ipairs(Replacements) do
-        result = replacePlain(result, pair[1], pair[2])
+    for _, pair in ipairs(Phrases) do
+        result = plainReplace(result, pair[1], pair[2])
     end
 
     result = translateUnits(result)
 
-    -- Conservative standalone replacements.
-    -- Do not globally replace short fragments before phrases.
-    local standalone = {
+    -- 单词级替换。
+    -- 这里只处理常见设置词，不修改 Instance.Name。
+    local words = {
         {"NPCs", "NPC"},
         {"Players", "玩家"},
         {"Player", "玩家"},
@@ -696,8 +754,6 @@ local function translateCommon(text)
         {"Default", "默认"},
         {"Enabled", "已启用"},
         {"Disabled", "已禁用"},
-        {"Through Walls", "穿墙"},
-        {"Walls", "墙体"},
         {"Color", "颜色"},
         {"Speed", "速度"},
         {"Delay", "延迟"},
@@ -727,182 +783,189 @@ local function translateCommon(text)
         {"Visible", "可见"},
         {"Show", "显示"},
         {"Hide", "隐藏"},
+        {"Yes", "是"},
+        {"No", "否"},
     }
 
-    for _, pair in ipairs(standalone) do
-        result = replacePlain(result, pair[1], pair[2])
+    for _, pair in ipairs(words) do
+        result = plainReplace(result, pair[1], pair[2])
     end
 
     return result
 end
 
 --==================================================
--- Main translator
+-- 主翻译函数
 --==================================================
 
-local function TranslateText(text)
+function TranslateText(text)
     if text == nil then
         return text
     end
 
-    text = normalizeText(text)
+    local original = tostring(text)
 
-    if text == "" then
-        return text
+    if original == "" then
+        return original
     end
 
-    -- Exact phrase has the highest priority.
-    if Exact[text] then
-        return Exact[text]
+    local normalized = normalize(original)
+
+    -- 完整词条优先
+    if Exact[normalized] then
+        return Exact[normalized]
     end
 
-    if Labels[text] then
-        return Labels[text]
+    if Labels[normalized] then
+        return Labels[normalized]
     end
 
-    if Values[text] then
-        return Values[text]
+    if Values[normalized] then
+        return Values[normalized]
     end
 
-    if Tooltips[text] then
-        return Tooltips[text]
+    if Tooltips[normalized] then
+        return Tooltips[normalized]
     end
 
-    -- Structured label/value expressions.
-    local structured = translateColonExpression(text)
+    -- RichText
+    if normalized:find("<") and normalized:find(">") then
+        return translateRichText(normalized)
+    end
+
+    -- label: value
+    local structured = translateStructured(normalized)
     if structured then
         return structured
     end
 
-    -- Common phrases + units.
-    local result = translateCommon(text)
+    local result = translatePlainText(normalized)
 
-    -- Keep already-translated Chinese stable.
-    -- If the result did not change and it already contains Chinese,
-    -- don't attempt increasingly aggressive replacements.
-    if result == text and hasChinese(text) then
-        return text
+    if result == normalized and hasChinese(normalized) then
+        return normalized
     end
 
     return result
 end
 
 --==================================================
--- GUI object helpers
+-- GUI 对象
 --==================================================
 
-local function isTextObject(object)
-    return object:IsA("TextLabel")
-        or object:IsA("TextButton")
-        or object:IsA("TextBox")
+local function isTextObject(obj)
+    return obj
+        and (
+            obj:IsA("TextLabel")
+            or obj:IsA("TextButton")
+            or obj:IsA("TextBox")
+        )
 end
 
-local function remember(object, source, translated)
-    TranslatedObjects[object] = {
+local function saveState(obj, source, translated, propertyName)
+    State[obj] = {
         source = source,
         translated = translated,
-        changedAt = os.clock(),
+        property = propertyName,
     }
 end
 
-local attachTextWatcher
-
-local function TranslateObject(object)
-    if not object or not object.Parent or not isTextObject(object) then
+local function translateProperty(obj, propertyName)
+    if not obj or not obj.Parent then
         return false
     end
 
-    attachTextWatcher(object)
+    local current
+    local ok = pcall(function()
+        current = obj[propertyName]
+    end)
 
-    local current = object.Text
-
-    if not current or current == "" then
+    if not ok or type(current) ~= "string" or current == "" then
         return false
     end
 
-    local state = TranslatedObjects[object]
+    local state = State[obj]
 
-    -- If Vape changed the text after our translation, current is new source text.
-    -- If current is exactly our previous translation, recover the original source.
-    local sourceText = current
+    local source = current
 
-    if state and state.translated == current then
-        sourceText = state.source
+    -- 如果当前内容就是我们上一次写进去的中文，
+    -- 恢复 state.source，防止二次翻译。
+    if state
+        and state.property == propertyName
+        and state.translated == current then
+        source = state.source
     end
 
-    local translated = TranslateText(sourceText)
+    local translated = TranslateText(source)
 
-    remember(object, sourceText, translated)
+    saveState(obj, source, translated, propertyName)
 
     if translated ~= current then
-        object.Text = translated
-        return true
+        local writeOk = pcall(function()
+            obj[propertyName] = translated
+        end)
+
+        return writeOk and true or false
     end
 
     return false
 end
 
-local function ScanGUI()
-    local count = 0
+local function attachWatcher(obj)
+    if not isTextObject(obj) then
+        return
+    end
 
-    for _, object in ipairs(game:GetDescendants()) do
-        if isTextObject(object) then
-            if TranslateObject(object) then
-                count += 1
-            end
+    if TextConnections[obj] then
+        return
+    end
+
+    local connections = {}
+
+    local function hook(propertyName)
+        local ok, conn = pcall(function()
+            return obj:GetPropertyChangedSignal(propertyName):Connect(function()
+                if not Config.AutoTranslate then
+                    return
+                end
+
+                task.defer(function()
+                    if obj.Parent then
+                        translateProperty(obj, propertyName)
+                    end
+                end)
+            end)
+        end)
+
+        if ok and conn then
+            table.insert(connections, conn)
         end
     end
 
-    LastScanCount = count
-    return count
+    hook("Text")
+
+    if obj:IsA("TextBox") then
+        hook("PlaceholderText")
+    end
+
+    TextConnections[obj] = connections
 end
 
---==================================================
--- Dynamic GUI watcher
---==================================================
-
-attachTextWatcher = function(object)
-    if not object or not isTextObject(object) then
-        return
-    end
-
-    if Connections[object] then
-        return
-    end
-
-    local ok, connection = pcall(function()
-        return object:GetPropertyChangedSignal("Text"):Connect(function()
-            if AutoTranslate and object.Parent then
-                task.defer(function()
-                    TranslateObject(object)
-                end)
-            end
-        end)
-    end)
-
-    if ok and connection then
-        Connections[object] = connection
-    end
-end
-
-local function ScanSubtree(root)
-    if not root then
+local function scanObject(obj)
+    if not obj then
         return 0
     end
 
     local count = 0
 
-    if isTextObject(root) then
-        attachTextWatcher(root)
-        if TranslateObject(root) then
+    if isTextObject(obj) then
+        attachWatcher(obj)
+
+        if translateProperty(obj, "Text") then
             count += 1
         end
-    end
 
-    for _, object in ipairs(root:GetDescendants()) do
-        if isTextObject(object) then
-            attachTextWatcher(object)
-            if TranslateObject(object) then
+        if obj:IsA("TextBox") then
+            if translateProperty(obj, "PlaceholderText") then
                 count += 1
             end
         end
@@ -911,128 +974,248 @@ local function ScanSubtree(root)
     return count
 end
 
-local function ScanGUI()
-    local count = 0
-
-    for _, object in ipairs(game:GetDescendants()) do
-        if isTextObject(object) then
-            attachTextWatcher(object)
-            if TranslateObject(object) then
-                count += 1
-            end
-        end
+local function scanTree(root)
+    if not root then
+        return 0
     end
 
-    LastScanCount = count
-    return count
-end
+    local count = scanObject(root)
 
-local function StartAutoTranslator()
-    if Connections.DescendantAdded then
-        Connections.DescendantAdded:Disconnect()
-    end
-
-    Connections.DescendantAdded = game.DescendantAdded:Connect(function(object)
-        if not AutoTranslate then
-            return
-        end
-
-        task.spawn(function()
-            -- Vape can construct a parent first and its text children later.
-            -- Retry several times so late-created GUI elements are caught.
-            for _, delayTime in ipairs({0, 0.08, 0.25, 0.75, 1.5}) do
-                if delayTime > 0 then
-                    task.wait(delayTime)
-                end
-                if object and object.Parent then
-                    pcall(function()
-                        ScanSubtree(object)
-                    end)
-                end
-            end
-        end)
+    local descendants = {}
+    pcall(function()
+        descendants = root:GetDescendants()
     end)
 
-    if Connections.TextWatcherLoop then
-        task.cancel(Connections.TextWatcherLoop)
+    for _, obj in ipairs(descendants) do
+        count += scanObject(obj)
     end
 
-    Connections.TextWatcherLoop = task.spawn(function()
-        while true do
-            task.wait(1.0)
+    return count
+end
 
-            if AutoTranslate then
-                -- Full rescans are intentional: Vape can mutate existing GUI
-                -- objects without firing DescendantAdded.
-                pcall(ScanGUI)
-            end
+--==================================================
+-- 只扫真正可能承载 Vape GUI 的容器
+--==================================================
+
+local function getRoots()
+    local roots = {}
+
+    local okCore, core = pcall(function()
+        return game:GetService("CoreGui")
+    end)
+
+    if okCore and core then
+        table.insert(roots, core)
+    end
+
+    local okPlayers, players = pcall(function()
+        return game:GetService("Players")
+    end)
+
+    if okPlayers and players and players.LocalPlayer then
+        local pg = players.LocalPlayer:FindFirstChildOfClass("PlayerGui")
+        if pg then
+            table.insert(roots, pg)
+        end
+    end
+
+    return roots
+end
+
+local function fullScan()
+    if not Config.AutoTranslate then
+        return 0
+    end
+
+    local total = 0
+
+    for _, root in ipairs(getRoots()) do
+        total += scanTree(root)
+    end
+
+    return total
+end
+
+--==================================================
+-- 动态监听
+--==================================================
+
+local function stopDynamic()
+    for _, conn in pairs(RootConnections) do
+        pcall(function()
+            conn:Disconnect()
+        end)
+    end
+
+    table.clear(RootConnections)
+
+    if FullScanThread then
+        pcall(function()
+            task.cancel(FullScanThread)
+        end)
+        FullScanThread = nil
+    end
+end
+
+local function startDynamic()
+    stopDynamic()
+
+    for _, root in ipairs(getRoots()) do
+        local ok, conn = pcall(function()
+            return root.DescendantAdded:Connect(function(obj)
+                if not Config.AutoTranslate then
+                    return
+                end
+
+                task.spawn(function()
+                    task.wait(Config.ScanDelay)
+
+                    -- Vape 有时先创建 Frame，稍后才写 Text。
+                    for _, delayTime in ipairs({0, 0.08, 0.25, 0.75, 1.5}) do
+                        if delayTime > 0 then
+                            task.wait(delayTime)
+                        end
+
+                        if obj and obj.Parent then
+                            pcall(function()
+                                scanTree(obj)
+                            end)
+                        end
+                    end
+                end)
+            end)
+        end)
+
+        if ok and conn then
+            table.insert(RootConnections, conn)
+        end
+    end
+
+    -- 处理“对象没新增，但 Text 被内部代码改掉”的情况。
+    FullScanThread = task.spawn(function()
+        while Config.AutoTranslate do
+            task.wait(Config.FullScanInterval)
+            pcall(fullScan)
         end
     end)
 end
 
 --==================================================
--- WindUI control panel
+-- WindUI 控制面板
 --==================================================
 
 local Window = WindUI:CreateWindow({
-    Title = "Vape 中文翻译器 由sevgranddad制作awa",
-    Author = "Vape GUI Translator V4",
+    Title = "Vape 中文翻译器 V5",
+    Author = "Vape GUI Translator",
     Icon = "languages",
     Theme = "Dark",
     ToggleKey = Enum.KeyCode.RightControl,
 })
 
-local MainTab = Window:Tab({
+local Tab = Window:Tab({
     Title = "翻译器",
     Icon = "languages",
 })
 
-MainTab:Paragraph({
-    Title = "成功加载：Vape 中文翻译器 V4",
-    Content = "模块 + 设置 + 设置值 + 动态文本 + Tooltip",
+Tab:Paragraph({
+    Title = "V5 从零重构",
+    Content = "主菜单 + 模块 + 设置 + Text GUI + 动态 GUI",
 })
 
-MainTab:Toggle({
+Tab:Toggle({
     Title = "自动翻译",
     Value = true,
     Callback = function(value)
-        AutoTranslate = value
+        Config.AutoTranslate = value
 
         if value then
-            local count = ScanGUI()
+            local count = fullScan()
+            startDynamic()
 
             WindUI:Notify({
                 Title = "自动翻译已开启",
-                Content = "重新扫描并翻译了 " .. tostring(count) .. " 个文本",
+                Content = "重新扫描：" .. tostring(count) .. " 项",
                 Duration = 3,
             })
         else
             WindUI:Notify({
                 Title = "自动翻译已关闭",
-                Content = "不会继续处理新出现的文本",
+                Content = "停止处理新的 GUI 文本",
                 Duration = 3,
             })
         end
     end,
 })
 
-MainTab:Button({
-    Title = "扫描并翻译当前界面",
+Tab:Button({
+    Title = "立即扫描并翻译",
     Callback = function()
-        local count = ScanGUI()
+        local count = fullScan()
 
         WindUI:Notify({
             Title = "扫描完成",
-            Content = "本次翻译了 " .. tostring(count) .. " 个文本",
+            Content = "本次修改：" .. tostring(count) .. " 项",
             Duration = 3,
         })
     end,
 })
 
-MainTab:Button({
-    Title = "测试动态设置翻译",
+Tab:Button({
+    Title = "重启动态监听",
+    Callback = function()
+        startDynamic()
+
+        WindUI:Notify({
+            Title = "监听已重启",
+            Content = "CoreGui / PlayerGui 动态监听已重新建立",
+            Duration = 3,
+        })
+    end,
+})
+
+Tab:Button({
+    Title = "测试截图中的设置",
     Callback = function()
         local tests = {
+            "Combat",
+            "Blatant",
+            "Render",
+            "Utility",
+            "World",
+            "Inventory",
+            "MISC",
+            "Friends",
+            "Profiles",
+            "Targets",
+            "AimAssist",
+            "AutoClicker",
+            "Reach",
+            "SilentAim",
+            "TriggerBot",
+            "AntiFall",
+            "Fly",
+            "HighJump",
+            "HitBoxes",
+            "Invisible",
+            "Jesus",
+            "Killaura",
+            "LongJump",
+            "MouseTP",
+            "Phase",
+            "Speed",
+            "Spider",
+            "SpinBot",
+            "Swim",
+            "Text GUI",
+            "Target Info",
+            "Radar",
+            "Session Info",
+            "Search mods",
+            "Settings",
+            "General",
+            "Modules",
+            "GUI",
+            "Notifications",
             "Target: Players, NPCs",
             "Ignore: None",
             "Attacks per Second: 20",
@@ -1045,65 +1228,45 @@ MainTab:Button({
             "Sword lunge only",
             "Show target",
             "Target Color",
-            "Hit Chance: 75%",
-            "Players, NPCs",
-            "None",
-            "18 studs",
-            "90 degrees",
         }
 
-        local output = {}
+        local okCount = 0
+        local bad = {}
 
-        for _, value in ipairs(tests) do
-            table.insert(output, value .. " → " .. TranslateText(value))
+        for _, input in ipairs(tests) do
+            local output = TranslateText(input)
+
+            if output ~= input then
+                okCount += 1
+            else
+                table.insert(bad, input)
+            end
         end
 
         WindUI:Notify({
-            Title = "V4 翻译测试",
-            Content = table.concat(output, "\n"),
-            Duration = 10,
+            Title = "翻译器自检",
+            Content = "成功处理：" .. tostring(okCount) ..
+                " / " .. tostring(#tests) ..
+                ( #bad > 0 and "\n仍未变化：" .. table.concat(bad, "、") or "\n全部发生变化"),
+            Duration = 8,
         })
     end,
 })
 
-MainTab:Button({
-    Title = "重新启动动态监听",
-    Callback = function()
-        StartAutoTranslator()
-
-        WindUI:Notify({
-            Title = "动态监听已重启",
-            Content = "现在会继续监听新增和变化的 GUI 文本",
-            Duration = 3,
-        })
-    end,
-})
-
-MainTab:Toggle({
+Tab:Toggle({
     Title = "调试模式",
     Value = false,
     Callback = function(value)
-        DebugMode = value
+        Config.Debug = value
     end,
 })
 
-MainTab:Paragraph({
-    Title = "V4 处理顺序",
-    Content = "精确词条 → 设置/值 → 结构化文本 → 常用术语 → 动态数值/单位",
-})
-
 --==================================================
--- Start
+-- 启动
 --==================================================
 
-StartAutoTranslator()
-
-task.wait(1)
-
-local count = ScanGUI()
-
-WindUI:Notify({
-    Title = "Vape 中文翻译器 V4",
-    Content = "已启动，首次翻译 " .. tostring(count) .. " 个文本",
-    Duration = 5,
-})
+task.spawn(function()
+    task.wait(0.25)
+    fullScan()
+    startDynamic()
+end)
