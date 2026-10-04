@@ -20,6 +20,96 @@ end)
 local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
 
+-- ========================================
+-- VAPE V4 启动画面
+-- ========================================
+
+pcall(function()
+
+    local Players = game:GetService("Players")
+    local TweenService = game:GetService("TweenService")
+
+    local Player = Players.LocalPlayer
+    if not Player then
+        return
+    end
+
+    local PlayerGui = Player:WaitForChild("PlayerGui")
+
+    -- 创建启动画面
+    local SplashGui = Instance.new("ScreenGui")
+    SplashGui.Name = "VapeCN_Splash"
+    SplashGui.IgnoreGuiInset = true
+    SplashGui.ResetOnSpawn = false
+    SplashGui.DisplayOrder = 999999
+    SplashGui.Parent = PlayerGui
+
+    -- 黑色背景
+    local Background = Instance.new("Frame")
+    Background.Size = UDim2.fromScale(1, 1)
+    Background.Position = UDim2.fromScale(0, 0)
+    Background.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    Background.BackgroundTransparency = 0
+    Background.BorderSizePixel = 0
+    Background.Parent = SplashGui
+
+    -- 图片
+    local Image = Instance.new("ImageLabel")
+    Image.AnchorPoint = Vector2.new(0.5, 0.5)
+    Image.Position = UDim2.fromScale(0.5, 0.5)
+
+    -- 根据你的图片比例调整
+    Image.Size = UDim2.fromScale(0.85, 0.65)
+
+    Image.BackgroundTransparency = 1
+    Image.Image = "https://raw.githubusercontent.com/sevgranddad/VAPE-Chinese-/main/Screenshot_20261003_183109.jpg"
+
+    -- 一开始完全透明
+    Image.ImageTransparency = 1
+
+    Image.ScaleType = Enum.ScaleType.Fit
+    Image.Parent = Background
+
+    -- 淡入
+    local FadeIn = TweenService:Create(
+        Image,
+        TweenInfo.new(
+            0.8,
+            Enum.EasingStyle.Quad,
+            Enum.EasingDirection.Out
+        ),
+        {
+            ImageTransparency = 0
+        }
+    )
+
+    FadeIn:Play()
+    FadeIn.Completed:Wait()
+
+    -- 停留
+    task.wait(1.5)
+
+    -- 淡出
+    local FadeOut = TweenService:Create(
+        Image,
+        TweenInfo.new(
+            0.8,
+            Enum.EasingStyle.Quad,
+            Enum.EasingDirection.In
+        ),
+        {
+            ImageTransparency = 1
+        }
+    )
+
+    FadeOut:Play()
+    FadeOut.Completed:Wait()
+
+    -- 删除启动画面
+    SplashGui:Destroy()
+
+end)
+
 -- Rayfield 控制面板：只负责控制翻译器，不替代 Vape 原界面。
 local Rayfield = nil
 pcall(function()
