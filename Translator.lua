@@ -1,9 +1,3 @@
--- Vape V4 中文翻译器
--- 直接翻译 Vape 原有界面文字：不创建翻译面板，不移动按钮，不修改 Vape 功能逻辑。
--- 按《VAPE V4模块翻译对照表》整理
--- 只修改界面文字，不修改 Vape 核心模块逻辑。
--- 注意：对照表最后提到的 Blatant 两个未命名项目（“围绕目标旋转”“时间”）
--- 没有英文原名，因此这里不擅自猜名字。
 
 local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
@@ -11,11 +5,6 @@ local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
 
 -- ============================================================
--- 启动提示：声音 + GitHub 启动图片淡入 / 停留 / 淡出
--- 使用与之前 Loader 相同的 Delta 本地资源方式：
--- HttpGet -> writefile -> getcustomasset -> ImageLabel.Image
--- ============================================================
-
 local IMAGE_URL =
     "https://raw.githubusercontent.com/sevgranddad/VAPE-Chinese-/main/Screenshot_20261003_183109.jpg"
 
@@ -164,7 +153,30 @@ local Translator = {
     ["Spider"] = "蜘蛛爬墙",
     ["SpinBot"] = "旋转机器人",
     ["Swim"] = "空中游泳",
-
+    ["AnticheatBypass"] = "反作弊绕过",
+    ["AntiFling"] = "防恶意甩飞",
+    ["AntiHazard"] = "危险区域防护",
+    ["AntiInvisible"] = "反隐身",
+    ["AntiKillPlane"] = "防死亡区域",
+    ["AntiParry"] = "反格挡",
+    ["AntiRiotShield"] = "反防暴盾",
+   ["CameraPhase"] = "镜头穿墙",
+   ["FenceGodmode"] = "栅栏无敌",
+["FlyingAttack"] = "空中攻击",
+    ["InfiniteDash"] = "无限冲刺",
+["InfiniteNitro"] = "无限氮气",
+     ["KeepSprint"] = "保持疾跑",
+["NoClickDelay"] = "移除点击延迟",
+["NoFall"] = "防止摔落伤害",
+["NoHurtCam"] = "移除受伤镜头",
+["NoJumpCooldown"] = "移除跳跃冷却",
+["NoSlowdown"] = "防止减速",
+["SpeedSpin"] = "高速旋转",
+["Sprint"] = "疾跑",
+["TargetStrafe"] = "绕目标移动",
+["Timer"] = "游戏速度调节",
+["TrapDisabler"] = "陷阱禁用",
+["Velocity"] = "击退控制",
     -- Render
     ["Arrows"] = "敌人方向箭头",
     ["Chams"] = "透视描边",
@@ -177,7 +189,28 @@ local Translator = {
     ["Search"] = "物品检索透视",
     ["Tracers"] = "敌人连线",
     ["Waypoints"] = "路径标记点",
-
+    ["BedESP"] = "床位透视",
+["BedPlates"] = "床位标记",
+["BedProtector"] = "床位保护显示",
+["ComputerESP"] = "电脑透视",
+["Crosshair"] = "准星",
+["Damage Indicator"] = "伤害指示器",
+["DamageIndicator"] = "伤害指示器",
+["FPS Boost"] = "帧率优化",
+["FPSBooster"] = "帧率优化",
+["HideShield"] = "隐藏盾牌",
+["Hit Color"] = "命中颜色",
+["HitSound"] = "命中音效",
+["Kill Effect"] = "击杀特效",
+["KillNotifications"] = "击杀通知",
+["KillSound"] = "击杀音效",
+["KitESP"] = "套装透视",
+["PickupTracers"] = "拾取物追踪线",
+["Reach Display"] = "攻击距离显示",
+["StorageESP"] = "储物箱透视",
+["ThirdPerson"] = "第三人称",
+["Viewmodel"] = "手持模型",
+["WinEffect"] = "胜利特效",
     -- Utility
     ["AnimationPlayer"] = "动画播放器",
     ["AntiRagdoll"] = "防布娃娃倒地",
@@ -192,6 +225,34 @@ local Translator = {
     ["StaffDetector"] = "管理员检测",
 
     -- World
+    ["Bed Break Effect"] = "破床特效",
+["Breaker"] = "自动破坏方块",
+["ChestSteal"] = "自动搜箱",
+["China Hat"] = "斗笠",
+["Clean Kit"] = "清理套装",
+["Criticals"] = "暴击增强",
+["FastBreak"] = "快速破坏",
+["FastConsume"] = "快速使用消耗品",
+["FastDrop"] = "快速丢弃",
+["FastPlace"] = "快速放置",
+["ForceEquip"] = "强制装备",
+["InstantAction"] = "即时操作",
+["InvMove"] = "背包移动",
+["KickExploit"] = "踢出漏洞",
+["MissCooldown"] = "未命中冷却",
+["PickupRange"] = "拾取范围",
+["PickupTP"] = "拾取传送",
+["RavenTP"] = "乌鸦传送",
+["RestrainBeast"] = "束缚野兽",
+["Scaffold"] = "自动搭路",
+["Schematica"] = "建筑蓝图",
+["ShopTierBypass"] = "商店等级绕过",
+["SlowBeast"] = "减缓野兽",
+["SpamBeast"] = "野兽技能连发",
+["SoundChanger"] = "音效修改",
+["UI Cleanup"] = "界面清理",
+["VehicleFly"] = "载具飞行",
+["VehicleSpeed"] = "载具速度修改",
     ["Anti-AFK"] = "防挂机",
     ["FastProxPrompt"] = "快速交互提示",
     ["Freecam"] = "自由视角",
@@ -325,7 +386,43 @@ local Extra = {
     ["Enabled"] = "已启用",
     ["Disabled"] = "已禁用",
 }
-
+local Translator = {
+    ["AutoAction"] = "自动执行操作",
+["AutoArmor"] = "自动穿戴护甲",
+["AutoArrest"] = "自动逮捕",
+["AutoBalloon"] = "自动使用气球",
+["AutoBank"] = "自动存入银行",
+["AutoBlock"] = "自动格挡",
+["AutoBuy"] = "自动购买",
+["AutoCamel"] = "自动骆驼操作",
+["AutoCloudGrind"] = "自动刷取云朵",
+["AutoComputer"] = "自动操作电脑",
+["AutoConsume"] = "自动使用消耗品",
+["AutoDetonate"] = "自动引爆",
+["AutoEject"] = "自动弹出载具",
+["AutoFish"] = "自动钓鱼",
+["AutoHeal"] = "自动治疗",
+["AutoHotbar"] = "自动整理快捷栏",
+["AutoKit"] = "自动使用套装",
+["AutoLeave"] = "自动离开",
+["AutoPaint"] = "自动绘画",
+["AutoParry"] = "自动格挡",
+["AutoPearl"] = "自动使用珍珠",
+["AutoPickpocket"] = "自动扒窃",
+["AutoPickup"] = "自动拾取",
+["AutoPlay"] = "自动游玩",
+["AutoPop"] = "自动触发弹出",
+["AutoPunch"] = "自动出拳",
+["AutoQueue"] = "自动排队",
+["AutoReload"] = "自动重新加载",
+["AutoReset"] = "自动重置",
+["AutoRespawn"] = "自动复活",
+["AutoSuffocate"] = "自动窒息攻击",
+["AutoTeam"] = "自动加入队伍",
+["AutoTool"] = "自动切换工具",
+["AutoToxic"] = "自动发送嘲讽消息",
+["AutoVoidDrop"] = "自动丢入虚空",
+}
 for k, v in pairs(Extra) do
     Translator[k] = v
 end
